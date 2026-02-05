@@ -11,9 +11,10 @@ class Settings(BaseSettings):
     """Configuration from ursaproxy.toml file and/or environment variables.
 
     Settings are loaded in this priority order (highest to lowest):
-    1. Environment variables (e.g., BEARBLOG_URL)
-    2. ursaproxy.toml file in current directory
-    3. Default values
+    1. Constructor arguments (e.g., Settings(bearblog_url="..."))
+    2. Environment variables (e.g., BEARBLOG_URL)
+    3. ursaproxy.toml file in current directory
+    4. Default values
 
     Example ursaproxy.toml:
         bearblog_url = "https://example.bearblog.dev"
@@ -57,9 +58,10 @@ class Settings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """Configure settings sources with TOML file support.
 
-        Priority (highest to lowest): env vars -> TOML file -> defaults.
+        Priority (highest to lowest): init args -> env vars -> TOML file -> defaults.
         """
         return (
+            init_settings,
             env_settings,
             TomlConfigSettingsSource(settings_cls),
         )
@@ -94,6 +96,6 @@ def load_settings() -> Settings:
                 dotenv_settings: PydanticBaseSettingsSource,
                 file_secret_settings: PydanticBaseSettingsSource,
             ) -> tuple[PydanticBaseSettingsSource, ...]:
-                return (env_settings,)
+                return (init_settings, env_settings)
 
         return _EnvOnlySettings()  # type: ignore[call-arg]
