@@ -2,9 +2,44 @@
 
 Complete reference for all UrsaProxy configuration options.
 
+## Configuration Sources
+
+UrsaProxy can be configured via:
+
+1. **TOML file** - `ursaproxy.toml` in the current directory
+2. **Environment variables** - Override TOML settings
+
+Settings are loaded in priority order: environment variables > TOML file > defaults.
+
+## TOML File Format
+
+Create an `ursaproxy.toml` file:
+
+```toml
+# Required
+bearblog_url = "https://example.bearblog.dev"
+blog_name = "My Blog"
+
+# TLS (required for serving)
+cert_file = "/path/to/cert.pem"
+key_file = "/path/to/key.pem"
+
+# Optional
+gemini_host = "gemini.example.com"
+host = "0.0.0.0"
+port = 1965
+cache_ttl_feed = 300
+cache_ttl_post = 1800
+
+# Pages as TOML table
+[pages]
+about = "About Me"
+now = "Now"
+```
+
 ## Environment Variables
 
-All configuration is via environment variables. UrsaProxy uses Pydantic Settings for validation and parsing.
+Environment variables use UPPER_CASE names and override TOML settings.
 
 ### Required Variables
 

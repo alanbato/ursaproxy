@@ -6,8 +6,8 @@ Python module and function documentation for UrsaProxy.
 
 ```
 ursaproxy/
-├── __init__.py   # App, routes, entry point
-├── config.py     # Settings
+├── __init__.py   # App factory, routes, entry point
+├── config.py     # Settings and configuration loading
 ├── fetcher.py    # HTTP client
 ├── converter.py  # HTML to Gemtext
 └── cache.py      # TTL cache
@@ -15,16 +15,56 @@ ursaproxy/
 
 ## ursaproxy
 
-Main module with the Xitzin application and route handlers.
+Main module with the app factory and public API.
 
-### Application
+### Public Exports
 
-::: ursaproxy.app
-    options:
-      show_source: false
-      heading_level: 4
+The main module exports:
 
-### Entry Point
+- `create_app(settings)` - Factory function to create app instances
+- `Settings` - Configuration class
+- `load_settings()` - Load settings from TOML/environment
+
+### create_app
+
+```python
+def create_app(settings: Settings) -> Xitzin:
+    """Create and configure an UrsaProxy application instance.
+
+    This factory function allows ursaproxy to be embedded in other Xitzin apps
+    for virtual hosting scenarios.
+
+    Args:
+        settings: Configuration for this ursaproxy instance.
+
+    Returns:
+        A configured Xitzin application.
+    """
+```
+
+**Example - Standalone:**
+
+```python
+from ursaproxy import create_app, load_settings
+
+app = create_app(load_settings())
+app.run()
+```
+
+**Example - Embedding:**
+
+```python
+from ursaproxy import create_app, Settings
+
+settings = Settings(
+    bearblog_url="https://myblog.bearblog.dev",
+    blog_name="My Blog",
+)
+ursaproxy_app = create_app(settings)
+# Mount in your main Xitzin app for virtual hosting
+```
+
+### main
 
 ::: ursaproxy.main
     options:
@@ -33,7 +73,7 @@ Main module with the Xitzin application and route handlers.
 
 ## ursaproxy.config
 
-Configuration module using Pydantic Settings.
+Configuration module using Pydantic Settings with TOML support.
 
 ### Settings
 
@@ -53,12 +93,28 @@ Configuration module using Pydantic Settings.
         - cert_file
         - key_file
 
-### settings
+### load_settings
 
-::: ursaproxy.config.settings
-    options:
-      show_source: false
-      heading_level: 4
+```python
+def load_settings() -> Settings:
+    """Load settings from TOML file and/or environment variables.
+
+    Use this when running ursaproxy standalone. For embedding in other apps,
+    create a Settings instance directly with the desired configuration.
+
+    Returns:
+        Configured Settings instance.
+    """
+```
+
+**Example:**
+
+```python
+from ursaproxy.config import load_settings
+
+settings = load_settings()
+print(settings.blog_name)
+```
 
 ## ursaproxy.fetcher
 
@@ -196,14 +252,16 @@ import httpx
 from ursaproxy.fetcher import fetch_feed, fetch_html, NotFoundError
 
 async def main():
+    bearblog_url = "https://example.bearblog.dev"
+
     async with httpx.AsyncClient() as client:
         # Fetch RSS feed
-        feed = await fetch_feed(client)
+        feed = await fetch_feed(client, bearblog_url)
         print(f"Blog: {feed.feed.title}")
 
         # Fetch a post
         try:
-            html = await fetch_html(client, "my-post")
+            html = await fetch_html(client, bearblog_url, "my-post")
             print(f"Got {len(html)} bytes")
         except NotFoundError:
             print("Post not found")

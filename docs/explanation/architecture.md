@@ -50,17 +50,30 @@ flowchart TB
 
 ## The Xitzin Framework
 
-UrsaProxy is built on [Xitzin](https://xitzin.readthedocs.io), a Gemini server framework with an API similar to FastAPI:
+UrsaProxy is built on [Xitzin](https://xitzin.readthedocs.io), a Gemini server framework with an API similar to FastAPI.
+
+### App Factory Pattern
+
+UrsaProxy uses a factory pattern for flexibility:
 
 ```python
-from xitzin import Xitzin, Request
+from ursaproxy import create_app, Settings
 
-app = Xitzin()
+# Create settings
+settings = Settings(
+    bearblog_url="https://example.bearblog.dev",
+    blog_name="My Blog",
+)
 
-@app.gemini("/")
-async def index(request: Request) -> str:
-    return "# Hello, Geminispace!"
+# Create app instance
+app = create_app(settings)
 ```
+
+This allows:
+
+- **Embedding**: Mount UrsaProxy in other Xitzin apps for virtual hosting
+- **Testing**: Create isolated app instances with different settings
+- **Multiple instances**: Run multiple proxies for different blogs
 
 Xitzin provides:
 
@@ -202,16 +215,37 @@ async def shutdown() -> None:
 
 ## Configuration
 
-All settings come from environment variables via Pydantic:
+Settings can come from a TOML file or environment variables:
 
 ```python
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(toml_file="ursaproxy.toml")
+
     bearblog_url: str
     blog_name: str
     cache_ttl_feed: int = 300
     # ...
+```
+
+Priority order: environment variables > TOML file > defaults.
+
+For standalone use, `load_settings()` handles configuration loading:
+
+```python
+from ursaproxy import create_app, load_settings
+
+app = create_app(load_settings())
+```
+
+For embedding, create settings directly:
+
+```python
+from ursaproxy import create_app, Settings
+
+settings = Settings(bearblog_url="...", blog_name="...")
+app = create_app(settings)
 ```
 
 See [Configuration Reference](../reference/configuration.md) for all options.

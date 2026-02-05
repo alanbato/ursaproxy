@@ -24,46 +24,92 @@ pip install ursaproxy
 
 ## Configuration
 
-UrsaProxy is configured via environment variables:
+UrsaProxy can be configured via a TOML file or environment variables.
 
-### Required
+### TOML Configuration (Recommended)
 
-| Variable | Description |
-|----------|-------------|
-| `BEARBLOG_URL` | The Bearblog URL to proxy (e.g., `https://example.bearblog.dev`) |
-| `BLOG_NAME` | Display name for the blog |
-| `CERT_FILE` | Path to TLS certificate file |
-| `KEY_FILE` | Path to TLS private key file |
+Create an `ursaproxy.toml` file in your working directory:
 
-### Optional
+```toml
+bearblog_url = "https://example.bearblog.dev"
+blog_name = "My Gemini Blog"
+cert_file = "/path/to/cert.pem"
+key_file = "/path/to/key.pem"
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PAGES` | `{}` | JSON dict of static pages `{"slug": "Title"}` |
-| `GEMINI_HOST` | `None` | Hostname for Gemini URLs in feed |
-| `CACHE_TTL_FEED` | `300` | Feed cache TTL in seconds (5 min) |
-| `CACHE_TTL_POST` | `1800` | Post cache TTL in seconds (30 min) |
-| `HOST` | `localhost` | Server bind address |
-| `PORT` | `1965` | Server port (Gemini default) |
+# Optional settings
+gemini_host = "gemini.example.com"
+cache_ttl_feed = 300
+cache_ttl_post = 1800
+host = "localhost"
+port = 1965
 
-### Example
-
-```bash
-export BEARBLOG_URL="https://example.bearblog.dev"
-export BLOG_NAME="My Gemini Blog"
-export CERT_FILE="/path/to/cert.pem"
-export KEY_FILE="/path/to/key.pem"
-export PAGES='{"about": "About Me", "now": "What I am doing now"}'
-export GEMINI_HOST="gemini.example.com"
+[pages]
+about = "About Me"
+now = "What I am doing now"
 ```
 
+### Environment Variables
+
+Environment variables override TOML settings:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `BEARBLOG_URL` | Yes | - | The Bearblog URL to proxy |
+| `BLOG_NAME` | Yes | - | Display name for the blog |
+| `CERT_FILE` | No | `None` | Path to TLS certificate file |
+| `KEY_FILE` | No | `None` | Path to TLS private key file |
+| `PAGES` | No | `{}` | JSON dict of static pages |
+| `GEMINI_HOST` | No | `None` | Hostname for Gemini URLs in feed |
+| `CACHE_TTL_FEED` | No | `300` | Feed cache TTL in seconds |
+| `CACHE_TTL_POST` | No | `1800` | Post cache TTL in seconds |
+| `HOST` | No | `localhost` | Server bind address |
+| `PORT` | No | `1965` | Server port |
+
+### Configuration Priority
+
+Settings are loaded in this order (highest to lowest priority):
+
+1. Environment variables
+2. `ursaproxy.toml` file
+3. Default values
+
 ## Usage
+
+### Standalone
 
 ```bash
 ursaproxy
 ```
 
 The server will start on `gemini://localhost:1965/` by default.
+
+### As a Library
+
+UrsaProxy can be embedded in other Xitzin applications for virtual hosting:
+
+```python
+from ursaproxy import create_app, Settings
+
+# Create settings programmatically
+settings = Settings(
+    bearblog_url="https://myblog.bearblog.dev",
+    blog_name="My Blog",
+)
+
+# Create the app
+app = create_app(settings)
+
+# Mount in your main Xitzin app or run directly
+app.run(certfile="cert.pem", keyfile="key.pem")
+```
+
+Or load settings from TOML/environment:
+
+```python
+from ursaproxy import create_app, load_settings
+
+app = create_app(load_settings())
+```
 
 ### Routes
 
@@ -131,7 +177,7 @@ src/ursaproxy/
 The test suite uses pytest with fixtures for offline testing:
 
 ```bash
-# Run all 111 tests
+# Run all tests
 uv run pytest
 
 # Run specific test file
