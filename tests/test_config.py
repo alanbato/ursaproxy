@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ursaproxy.config import Settings
+from ursaproxy.config import Settings, _load_settings
 
 
 class TestSettingsRequired:
@@ -245,3 +245,135 @@ class TestOptionalOverrides:
         settings = Settings()
         assert settings.cert_file == "/path/to/cert.pem"
         assert settings.key_file == "/path/to/key.pem"
+
+
+class TestTomlConfig:
+    """Tests for TOML file configuration."""
+
+    def test_loads_from_toml_file(self, tmp_path, monkeypatch):
+        """Test that settings can be loaded from ursaproxy.toml."""
+        toml_content = """\
+bearblog_url = "https://toml.bearblog.dev"
+blog_name = "TOML Blog"
+cache_ttl_feed = 600
+"""
+        toml_file = tmp_path / "ursaproxy.toml"
+        toml_file.write_text(toml_content)
+        monkeypatch.chdir(tmp_path)
+
+        # Clear env vars to ensure TOML is used
+        monkeypatch.delenv("BEARBLOG_URL", raising=False)
+        monkeypatch.delenv("BLOG_NAME", raising=False)
+
+        settings = _load_settings()
+
+        assert settings.bearblog_url == "https://toml.bearblog.dev"
+        assert settings.blog_name == "TOML Blog"
+        assert settings.cache_ttl_feed == 600
+
+    def test_toml_loads_pages_table(self, tmp_path, monkeypatch):
+        """Test that pages can be loaded from TOML table syntax."""
+        toml_content = """\
+bearblog_url = "https://test.bearblog.dev"
+blog_name = "Test"
+
+[pages]
+about = "About Me"
+now = "Now"
+"""
+        toml_file = tmp_path / "ursaproxy.toml"
+        toml_file.write_text(toml_content)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("BEARBLOG_URL", raising=False)
+        monkeypatch.delenv("BLOG_NAME", raising=False)
+
+        settings = _load_settings()
+
+        assert settings.pages == {"about": "About Me", "now": "Now"}
+
+    def test_env_vars_override_toml(self, tmp_path, monkeypatch):
+        """Test that environment variables take precedence over TOML."""
+        toml_content = """\
+bearblog_url = "https://toml.bearblog.dev"
+blog_name = "TOML Blog"
+cache_ttl_feed = 600
+"""
+        toml_file = tmp_path / "ursaproxy.toml"
+        toml_file.write_text(toml_content)
+        monkeypatch.chdir(tmp_path)
+
+        # Set env vars that should override TOML
+        monkeypatch.setenv("BEARBLOG_URL", "https://env.bearblog.dev")
+        monkeypatch.setenv("BLOG_NAME", "Env Blog")
+
+        settings = _load_settings()
+
+        # Env vars should win
+        assert settings.bearblog_url == "https://env.bearblog.dev"
+        assert settings.blog_name == "Env Blog"
+        # TOML value should be used when no env var set
+        assert settings.cache_ttl_feed == 600
+
+    def test_falls_back_to_env_when_no_toml(self, tmp_path, monkeypatch):
+        """Test that settings fall back to env vars when TOML doesn't exist."""
+        monkeypatch.chdir(tmp_path)  # Empty directory, no TOML file
+        monkeypatch.setenv("BEARBLOG_URL", "https://env.bearblog.dev")
+        monkeypatch.setenv("BLOG_NAME", "Env Blog")
+
+        settings = _load_settings()
+
+        assert settings.bearblog_url == "https://env.bearblog.dev"
+        assert settings.blog_name == "Env Blog"
+
+    def test_toml_url_validation(self, tmp_path, monkeypatch):
+        """Test that URL validation works for TOML-loaded values."""
+        toml_content = """\
+bearblog_url = "gemini://invalid.example.com"
+blog_name = "Test"
+"""
+        toml_file = tmp_path / "ursaproxy.toml"
+        toml_file.write_text(toml_content)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("BEARBLOG_URL", raising=False)
+        monkeypatch.delenv("BLOG_NAME", raising=False)
+
+        with pytest.raises(ValidationError) as exc_info:
+            _load_settings()
+
+        assert "must start with http:// or https://" in str(exc_info.value)
+
+    def test_toml_all_settings(self, tmp_path, monkeypatch):
+        """Test loading all settings from TOML."""
+        toml_content = """\
+bearblog_url = "https://full.bearblog.dev"
+blog_name = "Full Config Blog"
+cache_ttl_feed = 120
+cache_ttl_post = 3600
+gemini_host = "gemini.example.com"
+host = "0.0.0.0"
+port = 1966
+cert_file = "/etc/certs/cert.pem"
+key_file = "/etc/certs/key.pem"
+
+[pages]
+about = "About"
+contact = "Contact"
+"""
+        toml_file = tmp_path / "ursaproxy.toml"
+        toml_file.write_text(toml_content)
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("BEARBLOG_URL", raising=False)
+        monkeypatch.delenv("BLOG_NAME", raising=False)
+
+        settings = _load_settings()
+
+        assert settings.bearblog_url == "https://full.bearblog.dev"
+        assert settings.blog_name == "Full Config Blog"
+        assert settings.cache_ttl_feed == 120
+        assert settings.cache_ttl_post == 3600
+        assert settings.gemini_host == "gemini.example.com"
+        assert settings.host == "0.0.0.0"
+        assert settings.port == 1966
+        assert settings.cert_file == "/etc/certs/cert.pem"
+        assert settings.key_file == "/etc/certs/key.pem"
+        assert settings.pages == {"about": "About", "contact": "Contact"}

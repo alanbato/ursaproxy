@@ -1,9 +1,29 @@
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+    TomlConfigSettingsSource,
+)
 
 
 class Settings(BaseSettings):
-    """Configuration from environment variables."""
+    """Configuration from ursaproxy.toml file and/or environment variables.
+
+    Settings are loaded in this priority order (highest to lowest):
+    1. Environment variables (e.g., BEARBLOG_URL)
+    2. ursaproxy.toml file in current directory
+    3. Default values
+
+    Example ursaproxy.toml:
+        bearblog_url = "https://example.bearblog.dev"
+        blog_name = "My Blog"
+        pages = { about = "About Me", now = "Now" }
+    """
+
+    model_config = SettingsConfigDict(
+        toml_file="ursaproxy.toml",
+    )
 
     # Required: the Bearblog URL to proxy
     bearblog_url: str
@@ -26,6 +46,24 @@ class Settings(BaseSettings):
     cert_file: str | None = None
     key_file: str | None = None
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Configure settings sources with TOML file support.
+
+        Priority (highest to lowest): env vars -> TOML file -> defaults.
+        """
+        return (
+            env_settings,
+            TomlConfigSettingsSource(settings_cls),
+        )
+
     @field_validator("bearblog_url")
     @classmethod
     def normalize_url(cls, v: str) -> str:
@@ -36,4 +74,25 @@ class Settings(BaseSettings):
         return v
 
 
-settings = Settings()  # type: ignore[call-arg]  # pydantic-settings reads from env
+def _load_settings() -> Settings:
+    """Load settings, handling missing TOML file gracefully."""
+    try:
+        return Settings()  # type: ignore[call-arg]
+    except FileNotFoundError:
+        # No TOML file - disable TOML source and rely on env vars only
+        class _EnvOnlySettings(Settings):
+            @classmethod
+            def settings_customise_sources(
+                cls,
+                settings_cls: type[BaseSettings],
+                init_settings: PydanticBaseSettingsSource,
+                env_settings: PydanticBaseSettingsSource,
+                dotenv_settings: PydanticBaseSettingsSource,
+                file_secret_settings: PydanticBaseSettingsSource,
+            ) -> tuple[PydanticBaseSettingsSource, ...]:
+                return (env_settings,)
+
+        return _EnvOnlySettings()  # type: ignore[call-arg]
+
+
+settings = _load_settings()
