@@ -1,5 +1,9 @@
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+from html import escape
+
 import httpx
-from xitzin import NotFound, Request, TemporaryFailure, Xitzin
+from xitzin import NotFound, Request, Response, TemporaryFailure, Xitzin
 
 from .cache import cache
 from .config import settings
@@ -88,7 +92,7 @@ async def index(request: Request) -> str:
     for slug, title in settings.pages.items():
         lines.append(f"=> /page/{slug} {title}")
 
-    lines.extend(["", "## Recent Posts"])
+    lines.extend(["", "## Recent Posts", "=> /feed Atom Feed", ""])
 
     for entry in feed.entries[:10]:
         link = getattr(entry, "link", None)
@@ -133,6 +137,65 @@ async def about(request: Request) -> str:
 => / ← Back to index
 => {settings.bearblog_url} Visit on the web
 """
+
+
+def _rfc822_to_iso(date_str: str) -> str:
+    """Convert RFC 822 date to ISO 8601 format for Atom feeds."""
+    if not date_str:
+        return datetime.now().isoformat() + "Z"
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.isoformat().replace("+00:00", "Z")
+    except (ValueError, TypeError):
+        return datetime.now().isoformat() + "Z"
+
+
+@app.gemini("/feed")
+async def feed(request: Request) -> Response:
+    """Atom feed with Gemini URLs."""
+    rss = await _get_feed(request.app.state.client)
+
+    # Use configured gemini_host or fall back to request hostname
+    host = settings.gemini_host or request.hostname or "localhost"
+    base_url = f"gemini://{host}"
+
+    # Get the most recent update time
+    updated = _rfc822_to_iso(rss.feed.get("updated", ""))
+
+    entries = []
+    for entry in rss.entries:
+        link = getattr(entry, "link", None)
+        if not link:
+            continue
+        slug = extract_slug(link)
+        if not slug:
+            continue
+
+        title = escape(getattr(entry, "title", "Untitled"))
+        summary = escape(getattr(entry, "description", ""))
+        published = _rfc822_to_iso(entry.get("published", ""))
+        entry_url = f"{base_url}/post/{slug}"
+
+        entries.append(f"""  <entry>
+    <title>{title}</title>
+    <link href="{entry_url}" rel="alternate"/>
+    <id>{entry_url}</id>
+    <published>{published}</published>
+    <updated>{published}</updated>
+    <summary>{summary}</summary>
+  </entry>""")
+
+    atom_xml = f"""<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>{escape(settings.blog_name)}</title>
+  <link href="{base_url}/" rel="alternate"/>
+  <link href="{base_url}/feed" rel="self"/>
+  <id>{base_url}/</id>
+  <updated>{updated}</updated>
+{chr(10).join(entries)}
+</feed>"""
+
+    return Response(body=atom_xml, mime_type="application/atom+xml")
 
 
 def main() -> None:

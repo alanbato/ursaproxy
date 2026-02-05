@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Override via PAGES='{"about": "About Me", "now": "Now"}'
     pages: dict[str, str] = {}
 
+    # Gemini capsule hostname (for feed URLs)
+    # e.g., "gemini.example.com" -> gemini://gemini.example.com/post/...
+    gemini_host: str | None = None
+
     # Server settings
     host: str = "localhost"
     port: int = 1965
