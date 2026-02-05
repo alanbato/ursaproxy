@@ -1,8 +1,8 @@
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from html import escape
 
 import httpx
+from jinja2 import Environment, PackageLoader
 from xitzin import NotFound, Request, Response, TemporaryFailure, Xitzin
 
 from .cache import cache
@@ -11,6 +11,17 @@ from .converter import extract_metadata, extract_slug, html_to_gemtext
 from .fetcher import NotFoundError, ServerError, fetch_feed, fetch_html
 
 app = Xitzin()
+
+# Template environments
+templates = Environment(
+    loader=PackageLoader("ursaproxy", "templates"),
+    autoescape=False,  # Gemtext doesn't need HTML escaping
+)
+
+xml_templates = Environment(
+    loader=PackageLoader("ursaproxy", "templates"),
+    autoescape=True,  # XML escaping for feed
+)
 
 
 @app.on_startup
@@ -62,15 +73,13 @@ async def _render_content(
     title, date = extract_metadata(html)
     content = html_to_gemtext(html)
 
-    date_line = f"Published: {date}\n\n" if include_date and date else ""
-    gemtext = f"""# {title}
-
-{date_line}{content}
-
----
-=> / ← Back to index
-=> {settings.bearblog_url}/{slug}/ View on web
-"""
+    template = templates.get_template("post.gmi")
+    gemtext = template.render(
+        title=title,
+        date=date if include_date else None,
+        content=content,
+        web_url=f"{settings.bearblog_url}/{slug}/",
+    )
 
     cache.set(cache_key, gemtext)
     return gemtext
@@ -81,19 +90,7 @@ async def index(request: Request) -> str:
     """Landing page with recent posts and page links."""
     feed = await _get_feed(request.app.state.client)
 
-    lines = [
-        f"# {settings.blog_name}",
-        "",
-        feed.feed.get("description", ""),
-        "",
-        "## Pages",
-    ]
-
-    for slug, title in settings.pages.items():
-        lines.append(f"=> /page/{slug} {title}")
-
-    lines.extend(["", "## Recent Posts", "=> /feed Atom Feed", ""])
-
+    posts = []
     for entry in feed.entries[:10]:
         link = getattr(entry, "link", None)
         if not link:
@@ -103,9 +100,15 @@ async def index(request: Request) -> str:
             continue
         date = entry.get("published", "")[:16] if entry.get("published") else ""
         title = getattr(entry, "title", "Untitled")
-        lines.append(f"=> /post/{slug} {title} ({date})")
+        posts.append({"slug": slug, "title": title, "date": date})
 
-    return "\n".join(lines)
+    template = templates.get_template("index.gmi")
+    return template.render(
+        blog_name=settings.blog_name,
+        description=feed.feed.get("description", ""),
+        pages=settings.pages,
+        posts=posts,
+    )
 
 
 @app.gemini("/post/{slug}")
@@ -130,13 +133,12 @@ async def about(request: Request) -> str:
     feed = await _get_feed(request.app.state.client)
     description = feed.feed.get("description", "A personal blog.")
 
-    return f"""# About {settings.blog_name}
-
-{description}
-
-=> / ← Back to index
-=> {settings.bearblog_url} Visit on the web
-"""
+    template = templates.get_template("about.gmi")
+    return template.render(
+        blog_name=settings.blog_name,
+        description=description,
+        bearblog_url=settings.bearblog_url,
+    )
 
 
 def _rfc822_to_iso(date_str: str) -> str:
@@ -171,29 +173,22 @@ async def feed(request: Request) -> Response:
         if not slug:
             continue
 
-        title = escape(getattr(entry, "title", "Untitled"))
-        summary = escape(getattr(entry, "description", ""))
-        published = _rfc822_to_iso(entry.get("published", ""))
-        entry_url = f"{base_url}/post/{slug}"
+        entries.append(
+            {
+                "title": getattr(entry, "title", "Untitled"),
+                "url": f"{base_url}/post/{slug}",
+                "published": _rfc822_to_iso(entry.get("published", "")),
+                "summary": getattr(entry, "description", ""),
+            }
+        )
 
-        entries.append(f"""  <entry>
-    <title>{title}</title>
-    <link href="{entry_url}" rel="alternate"/>
-    <id>{entry_url}</id>
-    <published>{published}</published>
-    <updated>{published}</updated>
-    <summary>{summary}</summary>
-  </entry>""")
-
-    atom_xml = f"""<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <title>{escape(settings.blog_name)}</title>
-  <link href="{base_url}/" rel="alternate"/>
-  <link href="{base_url}/feed" rel="self"/>
-  <id>{base_url}/</id>
-  <updated>{updated}</updated>
-{chr(10).join(entries)}
-</feed>"""
+    template = xml_templates.get_template("feed.xml")
+    atom_xml = template.render(
+        blog_name=settings.blog_name,
+        base_url=base_url,
+        updated=updated,
+        entries=entries,
+    )
 
     return Response(body=atom_xml, mime_type="application/atom+xml")
 

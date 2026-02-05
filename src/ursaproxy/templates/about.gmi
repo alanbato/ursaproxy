@@ -1,0 +1,6 @@
+# About {{ blog_name }}
+
+{{ description }}
+
+=> / <- Back to index
+=> {{ bearblog_url }} Visit on the web

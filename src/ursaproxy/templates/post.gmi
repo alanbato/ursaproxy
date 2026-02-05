@@ -1,0 +1,10 @@
+# {{ title }}
+
+{% if date %}Published: {{ date }}
+
+{% endif %}
+{{ content }}
+
+---
+=> / <- Back to index
+=> {{ web_url }} View on web

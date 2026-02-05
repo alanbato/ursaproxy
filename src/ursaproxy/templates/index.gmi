@@ -1,0 +1,15 @@
+# {{ blog_name }}
+
+{{ description }}
+
+## Pages
+{% for slug, title in pages.items() %}
+=> /page/{{ slug }} {{ title }}
+{% endfor %}
+
+## Recent Posts
+=> /feed Atom Feed
+
+{% for post in posts %}
+=> /post/{{ post.slug }} {{ post.title }} ({{ post.date }})
+{% endfor %}
