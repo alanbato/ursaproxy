@@ -1,7 +1,5 @@
 """Tests for the fetcher module."""
 
-from unittest.mock import patch
-
 import httpx
 import pytest
 
@@ -13,6 +11,8 @@ from ursaproxy.fetcher import (
     fetch_feed,
     fetch_html,
 )
+
+TEST_BEARBLOG_URL = "https://test.bearblog.dev"
 
 
 class TestFetchErrors:
@@ -146,132 +146,121 @@ class TestFetchFeed:
     """Tests for fetch_feed function."""
 
     @pytest.mark.asyncio
-    async def test_fetch_feed_success(self, respx_mock, sample_rss_feed, mock_settings):
+    async def test_fetch_feed_success(self, respx_mock, sample_rss_feed):
         """Test successful feed fetch and parse."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/feed/?type=rss").mock(
-                return_value=httpx.Response(200, text=sample_rss_feed)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/feed/?type=rss").mock(
+            return_value=httpx.Response(200, text=sample_rss_feed)
+        )
 
-            async with httpx.AsyncClient() as client:
-                feed = await fetch_feed(client)
+        async with httpx.AsyncClient() as client:
+            feed = await fetch_feed(client, TEST_BEARBLOG_URL)
 
-            assert feed.feed.title == "Test Blog"
-            assert len(feed.entries) == 3
-            assert feed.entries[0].title == "First Post"
+        assert feed.feed.title == "Test Blog"
+        assert len(feed.entries) == 3
+        assert feed.entries[0].title == "First Post"
 
     @pytest.mark.asyncio
     async def test_fetch_feed_returns_feedparser_dict(
-        self, respx_mock, sample_rss_feed, mock_settings
+        self, respx_mock, sample_rss_feed
     ):
         """Test that feed returns a FeedParserDict."""
         import feedparser
 
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/feed/?type=rss").mock(
-                return_value=httpx.Response(200, text=sample_rss_feed)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/feed/?type=rss").mock(
+            return_value=httpx.Response(200, text=sample_rss_feed)
+        )
 
-            async with httpx.AsyncClient() as client:
-                feed = await fetch_feed(client)
+        async with httpx.AsyncClient() as client:
+            feed = await fetch_feed(client, TEST_BEARBLOG_URL)
 
-            assert isinstance(feed, feedparser.FeedParserDict)
+        assert isinstance(feed, feedparser.FeedParserDict)
 
     @pytest.mark.asyncio
-    async def test_fetch_feed_404(self, respx_mock, mock_settings):
+    async def test_fetch_feed_404(self, respx_mock):
         """Test feed 404 raises NotFoundError."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/feed/?type=rss").mock(
-                return_value=httpx.Response(404)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/feed/?type=rss").mock(
+            return_value=httpx.Response(404)
+        )
 
-            async with httpx.AsyncClient() as client:
-                with pytest.raises(NotFoundError) as exc_info:
-                    await fetch_feed(client)
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(NotFoundError) as exc_info:
+                await fetch_feed(client, TEST_BEARBLOG_URL)
 
-            assert "Feed not found" in str(exc_info.value)
+        assert "Feed not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_fetch_feed_server_error(self, respx_mock, mock_settings):
+    async def test_fetch_feed_server_error(self, respx_mock):
         """Test feed server error raises ServerError."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/feed/?type=rss").mock(
-                return_value=httpx.Response(500)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/feed/?type=rss").mock(
+            return_value=httpx.Response(500)
+        )
 
-            async with httpx.AsyncClient() as client:
-                with pytest.raises(ServerError):
-                    await fetch_feed(client)
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(ServerError):
+                await fetch_feed(client, TEST_BEARBLOG_URL)
 
 
 class TestFetchHtml:
     """Tests for fetch_html function."""
 
     @pytest.mark.asyncio
-    async def test_fetch_html_success(
-        self, respx_mock, sample_post_html, mock_settings
-    ):
+    async def test_fetch_html_success(self, respx_mock, sample_post_html):
         """Test successful HTML fetch."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/my-post/").mock(
-                return_value=httpx.Response(200, text=sample_post_html)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/my-post/").mock(
+            return_value=httpx.Response(200, text=sample_post_html)
+        )
 
-            async with httpx.AsyncClient() as client:
-                html = await fetch_html(client, "my-post")
+        async with httpx.AsyncClient() as client:
+            html = await fetch_html(client, TEST_BEARBLOG_URL, "my-post")
 
-            assert "My Test Post" in html
+        assert "My Test Post" in html
 
     @pytest.mark.asyncio
-    async def test_fetch_html_constructs_correct_url(self, respx_mock, mock_settings):
+    async def test_fetch_html_constructs_correct_url(self, respx_mock):
         """Test that URL is constructed with trailing slash."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            # Verify the exact URL format
-            route = respx_mock.get("https://test.bearblog.dev/test-slug/").mock(
-                return_value=httpx.Response(200, text="<html></html>")
-            )
+        # Verify the exact URL format
+        route = respx_mock.get(f"{TEST_BEARBLOG_URL}/test-slug/").mock(
+            return_value=httpx.Response(200, text="<html></html>")
+        )
 
-            async with httpx.AsyncClient() as client:
-                await fetch_html(client, "test-slug")
+        async with httpx.AsyncClient() as client:
+            await fetch_html(client, TEST_BEARBLOG_URL, "test-slug")
 
-            assert route.called
+        assert route.called
 
     @pytest.mark.asyncio
-    async def test_fetch_html_404(self, respx_mock, mock_settings):
+    async def test_fetch_html_404(self, respx_mock):
         """Test HTML 404 raises NotFoundError."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/nonexistent/").mock(
-                return_value=httpx.Response(404)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/nonexistent/").mock(
+            return_value=httpx.Response(404)
+        )
 
-            async with httpx.AsyncClient() as client:
-                with pytest.raises(NotFoundError) as exc_info:
-                    await fetch_html(client, "nonexistent")
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(NotFoundError) as exc_info:
+                await fetch_html(client, TEST_BEARBLOG_URL, "nonexistent")
 
-            assert "Page not found: nonexistent" in str(exc_info.value)
+        assert "Page not found: nonexistent" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_fetch_html_server_error(self, respx_mock, mock_settings):
+    async def test_fetch_html_server_error(self, respx_mock):
         """Test HTML server error raises ServerError."""
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/error-page/").mock(
-                return_value=httpx.Response(503)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/error-page/").mock(
+            return_value=httpx.Response(503)
+        )
 
-            async with httpx.AsyncClient() as client:
-                with pytest.raises(ServerError):
-                    await fetch_html(client, "error-page")
+        async with httpx.AsyncClient() as client:
+            with pytest.raises(ServerError):
+                await fetch_html(client, TEST_BEARBLOG_URL, "error-page")
 
     @pytest.mark.asyncio
-    async def test_fetch_html_returns_text(self, respx_mock, mock_settings):
+    async def test_fetch_html_returns_text(self, respx_mock):
         """Test that fetch_html returns response text."""
         expected_html = "<html><body>Test content</body></html>"
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            respx_mock.get("https://test.bearblog.dev/test/").mock(
-                return_value=httpx.Response(200, text=expected_html)
-            )
+        respx_mock.get(f"{TEST_BEARBLOG_URL}/test/").mock(
+            return_value=httpx.Response(200, text=expected_html)
+        )
 
-            async with httpx.AsyncClient() as client:
-                result = await fetch_html(client, "test")
+        async with httpx.AsyncClient() as client:
+            result = await fetch_html(client, TEST_BEARBLOG_URL, "test")
 
-            assert result == expected_html
+        assert result == expected_html

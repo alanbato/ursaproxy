@@ -1,13 +1,6 @@
 """Shared fixtures for offline testing."""
 
-import os
-
-# Set required environment variables before importing ursaproxy modules
-# This is needed because Settings() is instantiated at module import time
-os.environ.setdefault("BEARBLOG_URL", "https://test.bearblog.dev")
-os.environ.setdefault("BLOG_NAME", "Test Blog")
-
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import feedparser
 import httpx
@@ -173,23 +166,6 @@ def parsed_feed() -> feedparser.FeedParserDict:
 
 
 @pytest.fixture
-def mock_settings():
-    """Mock settings with test values."""
-    mock = MagicMock()
-    mock.bearblog_url = "https://test.bearblog.dev"
-    mock.blog_name = "Test Blog"
-    mock.pages = {"about": "About", "projects": "Projects"}
-    mock.gemini_host = None
-    mock.cache_ttl_feed = 300
-    mock.cache_ttl_post = 1800
-    mock.host = "localhost"
-    mock.port = 1965
-    mock.cert_file = None
-    mock.key_file = None
-    return mock
-
-
-@pytest.fixture
 def mock_http_client():
     """Create a mock httpx.AsyncClient."""
     return MagicMock(spec=httpx.AsyncClient)
@@ -237,12 +213,3 @@ def env_settings(monkeypatch):
             monkeypatch.setenv(key.upper(), str(value))
 
     return _set_env
-
-
-@pytest.fixture
-def patched_settings(mock_settings):
-    """Patch settings module with mock settings."""
-    with patch("ursaproxy.config.settings", mock_settings):
-        with patch("ursaproxy.fetcher.settings", mock_settings):
-            with patch("ursaproxy.settings", mock_settings):
-                yield mock_settings

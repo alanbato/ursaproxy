@@ -74,8 +74,12 @@ class Settings(BaseSettings):
         return v
 
 
-def _load_settings() -> Settings:
-    """Load settings, handling missing TOML file gracefully."""
+def load_settings() -> Settings:
+    """Load settings from TOML file and/or environment variables.
+
+    Use this when running ursaproxy standalone. For embedding in other apps,
+    create a Settings instance directly with the desired configuration.
+    """
     try:
         return Settings()  # type: ignore[call-arg]
     except FileNotFoundError:
@@ -93,6 +97,3 @@ def _load_settings() -> Settings:
                 return (env_settings,)
 
         return _EnvOnlySettings()  # type: ignore[call-arg]
-
-
-settings = _load_settings()

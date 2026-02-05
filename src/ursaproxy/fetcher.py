@@ -1,8 +1,6 @@
 import feedparser
 import httpx
 
-from .config import settings
-
 
 class FetchError(Exception):
     """Base error for fetch operations."""
@@ -35,19 +33,30 @@ async def _fetch(
         raise ServerError(f"Network error: {e}") from e
 
 
-async def fetch_feed(client: httpx.AsyncClient) -> feedparser.FeedParserDict:
-    """Fetch RSS feed from Bearblog."""
-    url = f"{settings.bearblog_url}/feed/?type=rss"
+async def fetch_feed(
+    client: httpx.AsyncClient, bearblog_url: str
+) -> feedparser.FeedParserDict:
+    """Fetch RSS feed from Bearblog.
+
+    Args:
+        client: HTTP client instance.
+        bearblog_url: Base URL of the Bearblog site.
+    """
+    url = f"{bearblog_url}/feed/?type=rss"
     response = await _fetch(client, url, f"Feed not found at {url}")
     return feedparser.parse(response.text)
 
 
-async def fetch_html(client: httpx.AsyncClient, slug: str) -> str:
-    """
-    Fetch HTML page from Bearblog.
+async def fetch_html(client: httpx.AsyncClient, bearblog_url: str, slug: str) -> str:
+    """Fetch HTML page from Bearblog.
+
+    Args:
+        client: HTTP client instance.
+        bearblog_url: Base URL of the Bearblog site.
+        slug: Page slug (without leading/trailing slashes).
 
     Note: Bearblog URLs have trailing slashes: /{slug}/
     """
-    url = f"{settings.bearblog_url}/{slug}/"
+    url = f"{bearblog_url}/{slug}/"
     response = await _fetch(client, url, f"Page not found: {slug}")
     return response.text

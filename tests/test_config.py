@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from ursaproxy.config import Settings, _load_settings
+from ursaproxy.config import Settings, load_settings
 
 
 class TestSettingsRequired:
@@ -265,7 +265,7 @@ cache_ttl_feed = 600
         monkeypatch.delenv("BEARBLOG_URL", raising=False)
         monkeypatch.delenv("BLOG_NAME", raising=False)
 
-        settings = _load_settings()
+        settings = load_settings()
 
         assert settings.bearblog_url == "https://toml.bearblog.dev"
         assert settings.blog_name == "TOML Blog"
@@ -287,7 +287,7 @@ now = "Now"
         monkeypatch.delenv("BEARBLOG_URL", raising=False)
         monkeypatch.delenv("BLOG_NAME", raising=False)
 
-        settings = _load_settings()
+        settings = load_settings()
 
         assert settings.pages == {"about": "About Me", "now": "Now"}
 
@@ -306,7 +306,7 @@ cache_ttl_feed = 600
         monkeypatch.setenv("BEARBLOG_URL", "https://env.bearblog.dev")
         monkeypatch.setenv("BLOG_NAME", "Env Blog")
 
-        settings = _load_settings()
+        settings = load_settings()
 
         # Env vars should win
         assert settings.bearblog_url == "https://env.bearblog.dev"
@@ -320,7 +320,7 @@ cache_ttl_feed = 600
         monkeypatch.setenv("BEARBLOG_URL", "https://env.bearblog.dev")
         monkeypatch.setenv("BLOG_NAME", "Env Blog")
 
-        settings = _load_settings()
+        settings = load_settings()
 
         assert settings.bearblog_url == "https://env.bearblog.dev"
         assert settings.blog_name == "Env Blog"
@@ -338,7 +338,7 @@ blog_name = "Test"
         monkeypatch.delenv("BLOG_NAME", raising=False)
 
         with pytest.raises(ValidationError) as exc_info:
-            _load_settings()
+            load_settings()
 
         assert "must start with http:// or https://" in str(exc_info.value)
 
@@ -365,7 +365,7 @@ contact = "Contact"
         monkeypatch.delenv("BEARBLOG_URL", raising=False)
         monkeypatch.delenv("BLOG_NAME", raising=False)
 
-        settings = _load_settings()
+        settings = load_settings()
 
         assert settings.bearblog_url == "https://full.bearblog.dev"
         assert settings.blog_name == "Full Config Blog"
